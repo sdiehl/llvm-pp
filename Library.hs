@@ -3,9 +3,10 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE NamedFieldPuns #-}
 
-module Main where
+module Library (
+  ppllvm,
+) where
 
 import GHC.Word
 
@@ -13,11 +14,6 @@ import LLVM.General.AST
 import LLVM.General.AST.Global
 import LLVM.General.AST.Float as F
 import LLVM.General.AST.Type hiding (float, double)
-
-import qualified LLVM.General.Module as M
-import LLVM.General.Context
-import Control.Monad.Error
-import LLVM.General.PrettyPrint
 
 import qualified LLVM.General.AST.Linkage as L
 import qualified LLVM.General.AST.Visibility as V
@@ -32,9 +28,9 @@ import Text.PrettyPrint.ANSI.Leijen
 
 import Data.List (intersperse)
 
-import System.IO
-import System.Exit
-import System.Environment
+-------------------------------------------------------------------------------
+-- Utils
+-------------------------------------------------------------------------------
 
 parensIf ::  Bool -> Doc -> Doc
 parensIf True = parens
@@ -110,14 +106,15 @@ instance PP Global where
   ppr p (Function {..}) =
       case basicBlocks of
         [] ->
-          ("declare" <+> pp returnType <+> "@" <> pp name <> parens (ppAnonParams parameters))
+          ("declare" <+> pp returnType <+> global (pp name) <> parens (ppAnonParams parameters))
 
-        -- single unnamed block is special cased, and won't parse otherwise... yeah
+        -- single unnamed block is special cased, and won't parse otherwise... yeah good times
         [b@(BasicBlock (UnName _) _ _)] ->
-            ("define" <+> pp returnType <+> "@" <> pp name <> parens (pp parameters)) <+>
+            ("define" <+> pp returnType <+> global (pp name) <> parens (pp parameters)) <+>
             wrapbraces (indent 2 $ ppSingleBlock b)
+
         bs ->
-          ("define" <+> pp returnType <+> "@" <> pp name <> parens (pp parameters)) <+>
+          ("define" <+> pp returnType <+> global (pp name) <> parens (pp parameters)) <+>
            wrapbraces ((vcat $ fmap pp bs))
     where
       blk a = nest 2 a
@@ -216,38 +213,5 @@ typePrefix (ConstantOperand (C.Float (F.Single _))) = "float"
 typePrefix (ConstantOperand (C.Float (F.Double _))) = "double"
 typePrefix (ConstantOperand (C.GlobalReference ty nm)) = pp ty <+> pp nm
 
-render :: Doc -> String
-render doc  = displayS (renderPretty 0.4 100 doc) ""
-
--------------------------------------------------------------------------------
--- Harness
--------------------------------------------------------------------------------
-
-readir :: FilePath -> IO ()
-readir fname = do
-  putStrLn $ replicate 80 '='
-  putStrLn fname
-  putStrLn $ replicate 80 '='
-  str <- readFile fname
-  withContext $ \ctx -> do
-    res <- runErrorT $ M.withModuleFromLLVMAssembly ctx str $ \mod -> do
-      ast <- M.moduleAST mod
-      putStrLn $ showPretty ast
-      let str = render (ppr 0 ast)
-      putStrLn str
-      trip <- runErrorT $ M.withModuleFromLLVMAssembly ctx str (const $ return ())
-      case trip of
-        Left err -> do
-          print err
-          exitFailure
-        Right ast -> putStrLn "round tripped!"
-
-    case res of
-      Left err -> print err
-      Right _ -> return ()
-
-main :: IO ()
-main = do
-  files <- getArgs
-  mapM readir files
-  return ()
+ppllvm :: Module -> String
+ppllvm mod  = displayS (renderPretty 0.4 100 (ppr 0 mod)) ""

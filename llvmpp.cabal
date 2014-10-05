@@ -5,13 +5,25 @@ license-file:        LICENSE
 author:              Stephen Diehl
 maintainer:          stephen.m.diehl@gmail.com
 build-type:          Simple
+category:            Compilers
 extra-source-files:  README.md
 cabal-version:       >=1.10
+homepage:            https://github.com/sdiehl/llvm-pp
+
+Synopsis: Pretty printer for LLVM IR.
+Description:
+  Pretty printer for LLVM IR.
+
+Source-Repository head
+    Type: git
+    Location: git@github.com:sdiehl/llvm-pp.git
 
 library
   --Hs-source-dirs:      src
+  exposed-modules:     Library
   default-language:    Haskell2010
   build-depends:       
-    base                 >= 4.6 && <4.7,
-    llvm-general         >= 3.4.4,
-    wl-pprint
+    base                 >= 4.6   && < 4.7,
+    llvm-general         >= 3.4.4 && < 3.5,
+    llvm-general-pure    >= 3.4.4 && < 3.5,
+    ansi-wl-pprint       >= 0.6   && < 0.7
