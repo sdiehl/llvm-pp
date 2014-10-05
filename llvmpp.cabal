@@ -1,0 +1,17 @@
+name:                llvm-pp
+version:             0.1.0.0
+license:             MIT
+license-file:        LICENSE
+author:              Stephen Diehl
+maintainer:          stephen.m.diehl@gmail.com
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  --Hs-source-dirs:      src
+  default-language:    Haskell2010
+  build-depends:       
+    base                 >= 4.6 && <4.7,
+    llvm-general         >= 3.4.4,
+    wl-pprint
