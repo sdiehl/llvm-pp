@@ -27,11 +27,14 @@ import qualified LLVM.General.AST.FloatingPointPredicate as FP
 import LLVM.General.AST.Attribute
 
 import Data.String
-import System.IO
 import Text.Printf
 import Text.PrettyPrint.ANSI.Leijen
 
 import Data.List (intersperse)
+
+import System.IO
+import System.Exit
+import System.Environment
 
 parensIf ::  Bool -> Doc -> Doc
 parensIf True = parens
@@ -51,6 +54,9 @@ wrapbraces x = char '{' <$$> ( x ) <$$> char '}'
 
 local :: Doc -> Doc
 local a = "%" <> a
+
+global :: Doc -> Doc
+global a = "@" <> a
 
 label :: Doc -> Doc
 label a = "label" <+> "%" <> a
@@ -219,6 +225,9 @@ render doc  = displayS (renderPretty 0.4 100 doc) ""
 
 readir :: FilePath -> IO ()
 readir fname = do
+  putStrLn $ replicate 80 '='
+  putStrLn fname
+  putStrLn $ replicate 80 '='
   str <- readFile fname
   withContext $ \ctx -> do
     res <- runErrorT $ M.withModuleFromLLVMAssembly ctx str $ \mod -> do
@@ -228,7 +237,9 @@ readir fname = do
       putStrLn str
       trip <- runErrorT $ M.withModuleFromLLVMAssembly ctx str (const $ return ())
       case trip of
-        Left err -> print err
+        Left err -> do
+          print err
+          exitFailure
         Right ast -> putStrLn "round tripped!"
 
     case res of
@@ -236,4 +247,7 @@ readir fname = do
       Right _ -> return ()
 
 main :: IO ()
-main = readir "sample.ir"
+main = do
+  files <- getArgs
+  mapM readir files
+  return ()
