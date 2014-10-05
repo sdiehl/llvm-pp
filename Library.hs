@@ -86,7 +86,7 @@ instance PP Name where
   ppr p (UnName x) = int (fromIntegral x)
 
 instance PP Parameter where
-  ppr p (Parameter ty name attrs) = pp ty <+> "%" <> pp name
+  ppr p (Parameter ty name attrs) = pp ty <+> local (pp name)
 
 instance PP ([Parameter], Bool) where
   ppr p (params, False) = commas (fmap pp params)
@@ -160,8 +160,8 @@ instance PP CallableOperand where
   ppr p (Right op) = ppr 1 op
 
 instance PP Operand where
-  ppr 0 (LocalReference ty nm) = pp ty <+> "%" <> pp nm
-  ppr 1 (LocalReference ty nm) = "%" <> pp nm
+  ppr 0 (LocalReference ty nm) = pp ty <+> local (pp nm)
+  ppr 1 (LocalReference ty nm) = local (pp nm)
 
   ppr 0 c@(ConstantOperand con) = typePrefix c <+> pp con
   ppr 1 (ConstantOperand con) = pp con
