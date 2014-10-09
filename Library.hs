@@ -15,19 +15,20 @@ import LLVM.General.AST.Global
 import LLVM.General.AST.Float as F
 import LLVM.General.AST.Type hiding (float, double)
 
+import LLVM.General.AST.Attribute
 import qualified LLVM.General.AST.Linkage as L
 import qualified LLVM.General.AST.Visibility as V
 import qualified LLVM.General.AST.CallingConvention as CC
 import qualified LLVM.General.AST.Constant as C
 import qualified LLVM.General.AST.FloatingPointPredicate as FP
 import qualified LLVM.General.AST.IntegerPredicate as IP
-import LLVM.General.AST.Attribute
 
 import Data.String
 import Text.Printf
 import Text.PrettyPrint.ANSI.Leijen
 
 import Data.List (intersperse)
+import Data.Char (chr)
 
 -------------------------------------------------------------------------------
 -- Utils
@@ -58,6 +59,9 @@ global a = "@" <> a
 label :: Doc -> Doc
 label a = "label" <+> "%" <> a
 
+ppMaybe (Just x) = pp x
+ppMaybe Nothing = empty
+
 -------------------------------------------------------------------------------
 -- Classes
 -------------------------------------------------------------------------------
@@ -73,6 +77,9 @@ instance PP String where
   ppr p x = text x
 
 instance PP Word32 where
+  ppr p x = int (fromIntegral x)
+
+instance PP Word64 where
   ppr p x = int (fromIntegral x)
 
 instance PP Integer where
@@ -97,10 +104,12 @@ instance PP Type where
   ppr p (FloatingPointType 64 spec) = "double"
   ppr p (FloatingPointType width spec) = "f" <> pp width
 
-  ppr p (VoidType) = "void"
+  ppr p VoidType = "void"
   ppr p (PointerType ref@(FunctionType {}) addr) = pp ref
   ppr p (PointerType ref addr) = pp ref <> "*"
   ppr p (FunctionType retty argtys vararg) = pp retty <+> parens (commas $ fmap pp argtys)
+
+  ppr p (ArrayType {..}) = brackets $ pp nArrayElements <+> "x" <+> pp elementType
   ppr p x = error (show x)
 
 instance PP Global where
@@ -117,6 +126,10 @@ instance PP Global where
         bs ->
           ("define" <+> pp returnType <+> global (pp name) <> parens (pp parameters)) <+>
            wrapbraces ((vcat $ fmap pp bs))
+
+  ppr p (GlobalVariable {..}) = global (dquotes (pp name)) <+> "=" <+> "global" <+> pp type' <+> ppMaybe initializer
+
+  ppr p x = error (show x)
     where
       blk a = nest 2 a
 
@@ -153,6 +166,11 @@ instance PP Instruction where
 
   ppr p f@(Call {}) = "call" <+>  ppFunction f
 
+  ppr p (GetElementPtr {..}) = "gep" <+> bounds inBounds <+> pp address
+    where
+      bounds True = "inbounds"
+      bounds False = ""
+
   ppr p x = error (show x)
 
 instance PP CallableOperand where
@@ -160,17 +178,30 @@ instance PP CallableOperand where
   ppr p (Right op) = ppr 1 op
 
 instance PP Operand where
+  -- i32 %a
   ppr 0 (LocalReference ty nm) = pp ty <+> local (pp nm)
+  -- %a
   ppr 1 (LocalReference ty nm) = local (pp nm)
 
   ppr 0 c@(ConstantOperand con) = typePrefix c <+> pp con
   ppr 1 (ConstantOperand con) = pp con
+
 
 instance PP C.Constant where
   ppr p (C.Int width val) = pp val
   ppr p (C.Float (F.Double val)) = text $ printf "%6.6e" val
   ppr p (C.Float (F.Single val)) = text $ printf "%6.6e" val
   ppr p (C.GlobalReference ty nm) = pp ty <+> pp nm
+
+  ppr  p (C.Array {..})
+    | memberType == (IntegerType 8) = "c" <> (dquotes $ (text $ (fmap (chr.fromIntegral) [val | C.Int _ val <- memberValues])) <> "\\00")
+    | otherwise = brackets $ commas $ fmap pp memberValues
+
+  ppr p (C.GetElementPtr {..}) = "getelementptr" <+> bounds inBounds <+> pp address
+    where
+      bounds True = "inbounds"
+      bounds False = ""
+
   ppr p x = error (show x)
 
 instance PP a => PP (Named a) where
@@ -214,11 +245,14 @@ ppFunction
 ppSingleBlock :: BasicBlock -> Doc
 ppSingleBlock (BasicBlock nm instrs term) = ((vcat $ (fmap pp instrs) ++ [pp term]))
 
+typePrefix :: Operand -> Doc
 typePrefix (LocalReference ty _) = pp ty
 typePrefix (ConstantOperand (C.Int width val)) = "i" <> pp width
+{-typePrefix (ConstantOperand (C.Array {..})) = memberType <+> (brackets $ commas $ fmap pp memberValues)-}
 typePrefix (ConstantOperand (C.Float (F.Single _))) = "float"
 typePrefix (ConstantOperand (C.Float (F.Double _))) = "double"
 typePrefix (ConstantOperand (C.GlobalReference ty nm)) = pp ty <+> pp nm
+typePrefix (ConstantOperand op) = pp op
 
 ppllvm :: Module -> String
 ppllvm mod  = displayS (renderPretty 0.4 100 (ppr 0 mod)) ""
