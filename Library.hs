@@ -20,6 +20,7 @@ import qualified LLVM.General.AST.Visibility as V
 import qualified LLVM.General.AST.CallingConvention as CC
 import qualified LLVM.General.AST.Constant as C
 import qualified LLVM.General.AST.FloatingPointPredicate as FP
+import qualified LLVM.General.AST.IntegerPredicate as IP
 import LLVM.General.AST.Attribute
 
 import Data.String
@@ -148,6 +149,8 @@ instance PP Instruction where
   ppr p (Load {..}) = "load" <+> pp address
   ppr p (Phi {..}) = "phi" <+> pp type' <+> commas (fmap phiIncoming incomingValues)
 
+  ppr p (ICmp {..}) = "icmp" <+> pp iPredicate <+> ppr 0 operand0 <> "," <+> ppr 1 operand1
+
   ppr p f@(Call {}) = "call" <+>  ppFunction f
 
   ppr p x = error (show x)
@@ -184,6 +187,10 @@ instance PP (FP.FloatingPointPredicate) where
    FP.False -> "false"
    FP.True  -> "false"
    FP.ONE   -> "one"
+
+instance PP (IP.IntegerPredicate) where
+  ppr p op = case op of
+   IP.ULT -> "ult"
 
 -------------------------------------------------------------------------------
 -- Special Case Hacks

@@ -1,6 +1,7 @@
 let
   pkgs = import <nixpkgs> {};
   zlib = pkgs.zlib;
+  ncurses = pkgs.ncurses;
   haskellPackages = pkgs.haskellPackages;
   cabal = haskellPackages.cabal;
   cabalInstall = haskellPackages.cabalInstall;
@@ -12,6 +13,7 @@ in cabal.mkDerivation (self: {
   isExecutable = false;
   buildDepends = [
     zlib
+    ncurses
     haskellPackages.llvmGeneral
     haskellPackages.llvmGeneralPure
     haskellPackages.ansiWlPprint
