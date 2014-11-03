@@ -8,6 +8,14 @@ the LLVM AST from pure Haskell without having to go through the C++ API.
 
 Pretty much no way this code is going to pretty, it's a giant string munging program. Be warned.
 
+Usage
+-----
+
+```bash
+$ nix-shell
+$ ghc -no-user-package-db Main.hs
+```
+
 License
 -------
 

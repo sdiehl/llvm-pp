@@ -4,8 +4,9 @@ import Library
 
 import qualified LLVM.General.Module as M
 import LLVM.General.Context
-import Control.Monad.Error
 import LLVM.General.PrettyPrint
+
+import Control.Monad.Error
 
 import System.IO
 import System.Exit

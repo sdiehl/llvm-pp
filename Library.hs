@@ -27,8 +27,8 @@ import Data.String
 import Text.Printf
 import Text.PrettyPrint.ANSI.Leijen
 
-import Data.List (intersperse)
 import Data.Char (chr)
+import Data.List (intersperse)
 
 -------------------------------------------------------------------------------
 -- Utils

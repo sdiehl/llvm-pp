@@ -5,6 +5,7 @@ let
   haskellPackages = pkgs.haskellPackages;
   cabal = haskellPackages.cabal;
   cabalInstall = haskellPackages.cabalInstall;
+
 in cabal.mkDerivation (self: {
   pname = "llvm-pp";
   version = "0.1.0.0";
@@ -14,12 +15,19 @@ in cabal.mkDerivation (self: {
   buildDepends = [
     zlib
     ncurses
+    # haskellPackages.transformers_0_3_0_0
+    haskellPackages.transformers
     haskellPackages.llvmGeneral
     haskellPackages.llvmGeneralPure
     haskellPackages.ansiWlPprint
+    #haskellPackages.cabal
+    haskellPackages.cabalInstall
   ];
-  buildTools = [ "cabalInstall_1_18_1_3" ];
+  buildTools = [ 
+  ];
   testDepends = [
+    # haskellPackages.transformers_0_3_0_0
+    haskellPackages.transformers
     haskellPackages.llvmGeneral
     haskellPackages.llvmGeneralPure
     haskellPackages.ansiWlPprint
