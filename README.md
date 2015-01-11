@@ -44,4 +44,7 @@ License
 -------
 
 Released under the MIT License.
+
 Copyright (c) 2014-2015, Stephen Diehl
+Copyright (c) 2015 Cedric Shock
+
