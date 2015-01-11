@@ -15,23 +15,20 @@ in cabal.mkDerivation (self: {
   buildDepends = [
     zlib
     ncurses
-    # haskellPackages.transformers_0_3_0_0
     haskellPackages.mtl
     haskellPackages.transformers
     haskellPackages.llvmGeneral
     haskellPackages.llvmGeneralPure
-    haskellPackages.ansiWlPprint
-    #haskellPackages.cabal
+    #haskellPackages.pretty
     haskellPackages.cabalInstall
   ];
   buildTools = [ 
   ];
   testDepends = [
-    # haskellPackages.transformers_0_3_0_0
     haskellPackages.transformers
     haskellPackages.llvmGeneral
     haskellPackages.llvmGeneralPure
-    haskellPackages.ansiWlPprint
+    #haskellPackages.pretty
   ];
   meta = {
     license = self.stdenv.lib.licenses.mit;

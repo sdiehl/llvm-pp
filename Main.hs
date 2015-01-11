@@ -1,10 +1,11 @@
 module Main where
 
-import Library
+--import Library
 
 import qualified LLVM.General.Module as M
 import LLVM.General.Context
 import LLVM.General.PrettyPrint
+import LLVM.General.Pretty (ppllvm)
 
 import Control.Monad.Error
 
@@ -35,7 +36,7 @@ readir fname = do
         Left err -> do
           print err
           exitFailure
-        Right ast -> putStrLn "round tripped!"
+        Right ast -> putStrLn "Round Tripped!"
 
     case res of
       Left err -> print err
