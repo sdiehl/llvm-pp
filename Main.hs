@@ -10,6 +10,7 @@ import Control.Monad.Error
 
 import System.IO
 import System.Exit
+import System.Directory
 import System.Environment
 
 -------------------------------------------------------------------------------
@@ -18,6 +19,7 @@ import System.Environment
 
 readir :: FilePath -> IO ()
 readir fname = do
+  putStrLn $ "Test: " ++ fname
   putStrLn $ replicate 80 '='
   putStrLn fname
   putStrLn $ replicate 80 '='
@@ -41,6 +43,14 @@ readir fname = do
 
 main :: IO ()
 main = do
+  putStrLn "Running test suite:"
   files <- getArgs
-  mapM readir files
+
+  case files of
+    [] -> do
+      dirfiles <- getDirectoryContents "tests"
+      mapM readir dirfiles
+    _  -> mapM readir files
+
+  putStrLn "All good."
   return ()

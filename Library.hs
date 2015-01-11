@@ -12,8 +12,7 @@ import GHC.Word
 
 import LLVM.General.AST
 import LLVM.General.AST.Global
-import LLVM.General.AST.Float as F
-import LLVM.General.AST.Type hiding (float, double)
+import LLVM.General.AST.Type
 
 import LLVM.General.AST.Attribute
 import qualified LLVM.General.AST.Linkage as L
@@ -22,13 +21,16 @@ import qualified LLVM.General.AST.CallingConvention as CC
 import qualified LLVM.General.AST.Constant as C
 import qualified LLVM.General.AST.FloatingPointPredicate as FP
 import qualified LLVM.General.AST.IntegerPredicate as IP
+import qualified LLVM.General.AST.AddrSpace as AS
+import qualified LLVM.General.AST.Float as F
 
 import Data.String
 import Text.Printf
-import Text.PrettyPrint.ANSI.Leijen
+import Text.PrettyPrint
 
-import Data.Char (chr)
+import Data.Char (chr, ord, isControl, isLetter, isDigit)
 import Data.List (intersperse)
+import Numeric (showHex)
 
 -------------------------------------------------------------------------------
 -- Utils
@@ -45,10 +47,10 @@ colons :: [Doc] -> Doc
 colons  = hcat . intersperse (char ':')
 
 hlinecat :: [Doc] -> Doc
-hlinecat = hcat . intersperse (hardline <> hardline)
+hlinecat = vcat . intersperse (text "")
 
-wrapbraces :: Doc -> Doc
-wrapbraces x = char '{' <$$> ( x ) <$$> char '}'
+wrapbraces :: Doc -> Doc -> Doc
+wrapbraces leadIn x = (leadIn <> char '{') $+$ ( x ) $+$ char '}'
 
 local :: Doc -> Doc
 local a = "%" <> a
@@ -59,200 +61,281 @@ global a = "@" <> a
 label :: Doc -> Doc
 label a = "label" <+> "%" <> a
 
-ppMaybe (Just x) = pp x
-ppMaybe Nothing = empty
+-----
+-- Reasoning about types
+-----
+
+class Typed a where
+    typeOf :: a -> Type
+
+instance Typed Operand where
+    typeOf (LocalReference t _) = t
+    typeOf (ConstantOperand c)  = typeOf c
+    typeOf _                    = MetadataType
+
+instance Typed C.Constant where
+    typeOf (C.Int bits _)  = IntegerType bits
+    typeOf (C.Float float) = typeOf float
+    typeOf (C.Null t)      = t
+    typeOf (C.Struct {..}) = StructureType isPacked (map typeOf memberValues)
+    typeOf (C.Array {..})  = ArrayType (fromIntegral $ length memberValues) memberType
+    typeOf (C.Vector {..}) = case memberValues of
+                                    [] -> error "Vectors of size zero are not allowed"
+                                    (x:_) -> ArrayType (fromIntegral $ length memberValues) (typeOf x)
+    typeOf (C.Undef t)     = t
+    typeOf (C.BlockAddress {..})   = PointerType (IntegerType 8) (AS.AddrSpace 0)
+    typeOf (C.GlobalReference t _) = t
+
+instance Typed F.SomeFloat where
+    typeOf (F.Half _)          = FloatingPointType 16  IEEE
+    typeOf (F.Single _)        = FloatingPointType 32  IEEE
+    typeOf (F.Double _)        = FloatingPointType 64  IEEE
+    typeOf (F.Quadruple _ _)   = FloatingPointType 128 IEEE
+    typeOf (F.X86_FP80 _ _)    = FloatingPointType 80  DoubleExtended
+    typeOf (F.PPC_FP128 _ _)   = FloatingPointType 80  PairOfFloats
+
+instance Typed Global where
+    typeOf (GlobalVariable {..}) = type'
+    typeOf (GlobalAlias {..})    = type'
+    typeOf (Function {..})       = let (params, isVarArg) = parameters
+                                   in FunctionType returnType (map typeOf params) isVarArg
+instance Typed Parameter where
+    typeOf (Parameter t _ _) = t
+
+isFunctionPtr (PointerType (FunctionType {..}) _) = True
+isFunctionPtr _ = False
 
 -------------------------------------------------------------------------------
 -- Classes
 -------------------------------------------------------------------------------
 
 class PP p where
-  ppr :: Int -> p -> Doc
-
-  {-# INLINE pp #-}
   pp :: p -> Doc
-  pp = ppr 0
 
-instance PP String where
-  ppr p x = text x
+ppMaybe (Just x) = pp x
+ppMaybe Nothing = empty
 
 instance PP Word32 where
-  ppr p x = int (fromIntegral x)
+  pp x = int (fromIntegral x)
 
 instance PP Word64 where
-  ppr p x = int (fromIntegral x)
+  pp x = int (fromIntegral x)
 
 instance PP Integer where
-  ppr p = integer
+  pp = integer
 
 instance PP Name where
-  ppr p (Name x) = text x
-  ppr p (UnName x) = int (fromIntegral x)
+  pp (Name []) = doubleQuotes empty
+  pp (Name name@(first:_))
+    | isFirst first && all isRest name = text name
+    | otherwise = doubleQuotes . hcat . map escape $ name
+    where
+        isFirst c = isLetter c || c == '-' || c == '_'
+        isRest c = isDigit c || isFirst c
+  pp (UnName x) = int (fromIntegral x)
 
 instance PP Parameter where
-  ppr p (Parameter ty name attrs) = pp ty <+> local (pp name)
+  pp (Parameter ty name attrs) = pp ty <+> local (pp name)
 
 instance PP ([Parameter], Bool) where
-  ppr p (params, False) = commas (fmap pp params)
+  pp (params, False) = commas (fmap pp params)
 
 instance PP (Operand, [ParameterAttribute]) where
-  ppr p (op, attrs) = pp op
+  pp (op, attrs) = ppTyped op
 
 instance PP Type where
-  ppr p (IntegerType width) = "i" <> pp width
-  ppr p (FloatingPointType 32 spec) = "float"
-  ppr p (FloatingPointType 64 spec) = "double"
-  ppr p (FloatingPointType width spec) = "f" <> pp width
+  pp (IntegerType width) = "i" <> pp width
+  pp (FloatingPointType 16    IEEE) = "half"
+  pp (FloatingPointType 32    IEEE) = "float"
+  pp (FloatingPointType 64    IEEE) = "double"
+  pp (FloatingPointType width IEEE) = "fp" <> pp width
+  pp (FloatingPointType width DoubleExtended) = "x86_fp" <> pp width
+  pp (FloatingPointType width PairOfFloats)   = "ppc_fp" <> pp width
 
-  ppr p VoidType = "void"
-  ppr p (PointerType ref@(FunctionType {}) addr) = pp ref
-  ppr p (PointerType ref addr) = pp ref <> "*"
-  ppr p (FunctionType retty argtys vararg) = pp retty <+> parens (commas $ fmap pp argtys)
-
-  ppr p (ArrayType {..}) = brackets $ pp nArrayElements <+> "x" <+> pp elementType
-  ppr p x = error (show x)
+  pp VoidType = "void"
+  pp (PointerType ref@(FunctionType {}) addr) = pp ref
+  pp (PointerType ref addr) = pp ref <> "*"
+  pp ft@(FunctionType {..}) = pp resultType <+> ppFunctionArgumentTypes ft
+  pp (VectorType {..}) = "<" <> pp nVectorElements <+> "x" <+> pp elementType <> ">"
+  pp (StructureType {..}) = if isPacked
+                               then "<{" <> (commas $ fmap pp elementTypes ) <> "}>"
+                               else  "{" <> (commas $ fmap pp elementTypes ) <> "}"
+  pp (ArrayType {..}) = brackets $ pp nArrayElements <+> "x" <+> pp elementType
+  pp (NamedTypeReference name) = "%" <> pp name
 
 instance PP Global where
-  ppr p (Function {..}) =
+  pp (Function {..}) =
       case basicBlocks of
         [] ->
-          ("declare" <+> pp returnType <+> global (pp name) <> parens (ppAnonParams parameters))
+          ("declare" <+> pp returnType <+> global (pp name) <> ppParams (pp . typeOf) parameters)
 
         -- single unnamed block is special cased, and won't parse otherwise... yeah good times
         [b@(BasicBlock (UnName _) _ _)] ->
-            ("define" <+> pp returnType <+> global (pp name) <> parens (pp parameters)) <+>
-            wrapbraces (indent 2 $ ppSingleBlock b)
+            ("define" <+> pp returnType <+> global (pp name) <> ppParams pp parameters)
+            `wrapbraces` (nest 2 $ ppSingleBlock b)
 
         bs ->
-          ("define" <+> pp returnType <+> global (pp name) <> parens (pp parameters)) <+>
-           wrapbraces ((vcat $ fmap pp bs))
+          ("define" <+> pp returnType <+> global (pp name) <> ppParams pp parameters)
+           `wrapbraces` (vcat $ fmap pp bs)
 
-  ppr p (GlobalVariable {..}) = global (dquotes (pp name)) <+> "=" <+> "global" <+> pp type' <+> ppMaybe initializer
+  pp (GlobalVariable {..}) = global (pp name) <+> "=" <+> "global" <+> pp type' <+> ppMaybe initializer
 
-  ppr p x = error (show x)
-    where
-      blk a = nest 2 a
 
 instance PP Definition where
-  ppr p (GlobalDefinition x) = pp x
+  pp (GlobalDefinition x) = pp x
 
 instance PP BasicBlock where
-  ppr p (BasicBlock nm instrs term) =
-    nest 2 (pp nm <> ":" <$$> ((vcat $ (fmap pp instrs) ++ [pp term])))
+  pp (BasicBlock nm instrs term) =
+    pp nm <> ":" $+$ nest 2 (vcat $ (fmap pp instrs) ++ [pp term])
 
 instance PP Terminator where
-  ppr p (Br dest meta) = "br" <+> label (pp dest)
-  ppr p (Ret val meta) = "ret" <+> maybe "void" pp val
-  ppr p (CondBr cond tdest fdest meta) =
-      "br" <+> pp cond
+  pp (Br dest meta) = "br" <+> label (pp dest)
+  pp (Ret val meta) = "ret" <+> maybe "void" ppTyped val
+  pp (CondBr cond tdest fdest meta) =
+      "br" <+> ppTyped cond
     <> "," <+> label (pp tdest)
     <> "," <+> label (pp fdest)
-  ppr p x = error (show x)
 
 instance PP Instruction where
-  ppr p (Mul {..}) = "mul" <+> ppr 0 operand0 <> "," <+> ppr 1 operand1
-  ppr p (Add {..}) = "add" <+> ppr 0 operand0 <> "," <+> ppr 1 operand1
+  pp (Mul {..}) = "mul" <+> ppTyped operand0 <> "," <+> pp operand1
+  pp (Add {..}) = "add" <+> ppTyped operand0 <> "," <+> pp operand1
+  pp (Sub {..}) = "sub" <+> ppTyped operand0 <> "," <+> pp operand1
+  pp (FSub {..}) = "fsub" <+> ppTyped operand0 <> "," <+> pp operand1
+  pp (FMul {..}) = "fmul" <+> ppTyped operand0 <> "," <+> pp operand1
 
-  ppr p (FMul {..}) = "fmul" <+> ppr 0 operand0 <> "," <+> ppr 1 operand1
-  ppr p (FAdd {..}) = "fadd" <+> ppr 0 operand0 <> "," <+> ppr 1 operand1
-  ppr p (FCmp {..}) = "fcmp" <+> pp fpPredicate <+> ppr 0 operand0 <> "," <+> ppr 1 operand1
+  pp (FAdd {..}) = "fadd" <+> ppTyped operand0 <> "," <+> pp operand1
+  pp (FCmp {..}) = "fcmp" <+> pp fpPredicate <+> ppTyped operand0 <> "," <+> pp operand1
 
-  ppr p (Alloca {..}) = "alloca" <+> pp allocatedType
-  ppr p (Store {..}) = "store" <+> pp value <> "," <+> pp address
-  ppr p (Load {..}) = "load" <+> pp address
-  ppr p (Phi {..}) = "phi" <+> pp type' <+> commas (fmap phiIncoming incomingValues)
+  pp (Alloca {..}) = "alloca" <+> pp allocatedType
+  pp (Store {..}) = "store" <+> ppTyped value <> "," <+> ppTyped address
+  pp (Load {..}) = "load" <+> ppTyped address
+  pp (Phi {..}) = "phi" <+> pp type' <+> commas (fmap phiIncoming incomingValues)
 
-  ppr p (ICmp {..}) = "icmp" <+> pp iPredicate <+> ppr 0 operand0 <> "," <+> ppr 1 operand1
+  pp (ICmp {..}) = "icmp" <+> pp iPredicate <+> ppTyped operand0 <> "," <+> pp operand1
 
-  ppr p f@(Call {}) = "call" <+>  ppFunction f
+  pp c@(Call {..}) = ppCall c
 
-  ppr p (GetElementPtr {..}) = "gep" <+> bounds inBounds <+> pp address
+  pp (GetElementPtr {..}) = "getelementptr" <+> bounds inBounds <+> commas (fmap ppTyped (address:indices))
     where
       bounds True = "inbounds"
-      bounds False = ""
-
-  ppr p x = error (show x)
+      bounds False = empty
 
 instance PP CallableOperand where
-  ppr p (Left asm) = undefined
-  ppr p (Right op) = ppr 1 op
+  pp (Left asm) = undefined
+  pp (Right op) = pp op
 
 instance PP Operand where
-  -- i32 %a
-  ppr 0 (LocalReference ty nm) = pp ty <+> local (pp nm)
-  -- %a
-  ppr 1 (LocalReference ty nm) = local (pp nm)
-
-  ppr 0 c@(ConstantOperand con) = typePrefix c <+> pp con
-  ppr 1 (ConstantOperand con) = pp con
+  pp (LocalReference _ nm) = local (pp nm)
+  pp (ConstantOperand con) = pp con
 
 
 instance PP C.Constant where
-  ppr p (C.Int width val) = pp val
-  ppr p (C.Float (F.Double val)) = text $ printf "%6.6e" val
-  ppr p (C.Float (F.Single val)) = text $ printf "%6.6e" val
-  ppr p (C.GlobalReference ty nm) = pp ty <+> pp nm
+  pp (C.Int width val) = pp val
+  pp (C.Float (F.Double val)) = text $ printf "%6.6e" val
+  pp (C.Float (F.Single val)) = text $ printf "%6.6e" val
+  pp (C.GlobalReference ty nm) = "@" <> pp nm
 
-  ppr  p (C.Array {..})
-    | memberType == (IntegerType 8) = "c" <> (dquotes $ (text $ (fmap (chr.fromIntegral) [val | C.Int _ val <- memberValues])) <> "\\00")
-    | otherwise = brackets $ commas $ fmap pp memberValues
+  pp (C.Array {..})
+    | memberType == (IntegerType 8) = "c" <> (doubleQuotes $ hcat [ppIntAsChar val | C.Int _ val <- memberValues])
+    | otherwise = brackets $ commas $ fmap ppTyped memberValues
 
-  ppr p (C.GetElementPtr {..}) = "getelementptr" <+> bounds inBounds <+> pp address
+
+  pp (C.GetElementPtr {..}) = "getelementptr" <+> bounds inBounds <+> commas (fmap ppTyped (address:indices))
     where
       bounds True = "inbounds"
-      bounds False = ""
-
-  ppr p x = error (show x)
+      bounds False = empty
 
 instance PP a => PP (Named a) where
-  ppr p (nm := a) = "%" <> pp nm <+> "=" <+> pp a
-  ppr p (Do a) = pp a
+  pp (nm := a) = "%" <> pp nm <+> "=" <+> pp a
+  pp (Do a) = pp a
 
 instance PP Module where
-  ppr p (Module {..}) =
+  pp (Module {..}) =
     let header = printf "; ModuleID = '%s'" moduleName in
     hlinecat (fromString header : (fmap pp moduleDefinitions))
 
 instance PP (FP.FloatingPointPredicate) where
-  ppr p op = case op of
+  pp op = case op of
    FP.False -> "false"
-   FP.True  -> "false"
+   FP.OEQ   -> "oeq"
+   FP.OGT   -> "ogt"
+   FP.OGE   -> "oge"
+   FP.OLT   -> "olt"
+   FP.OLE   -> "ole"
    FP.ONE   -> "one"
+   FP.ORD   -> "ord"
+   FP.UEQ   -> "ueq"
+   FP.UGT   -> "ugt"
+   FP.UGE   -> "uge"
+   FP.ULT   -> "ult"
+   FP.ULE   -> "ule"
+   FP.UNE   -> "une"
+   FP.UNO   -> "uno"
+   FP.True  -> "true"
 
 instance PP (IP.IntegerPredicate) where
-  ppr p op = case op of
+  pp op = case op of
+   IP.EQ  -> "eq"
+   IP.NE  -> "ne"
+   IP.UGT -> "ugt"
+   IP.UGE -> "uge"
    IP.ULT -> "ult"
+   IP.ULE -> "ule"
+   IP.SGT -> "sgt"
+   IP.SGE -> "sge"
+   IP.SLT -> "slt"
+   IP.SLE -> "sle"
 
 -------------------------------------------------------------------------------
 -- Special Case Hacks
 -------------------------------------------------------------------------------
 
+escape :: Char -> Doc
+escape '"'  = "\\\""
+escape '\\' = "\\\\"
+escape c    = if isControl c
+              then "\\" <> hex c
+              else char c
+    where
+        hex :: Char -> Doc
+        hex = pad0 . ($ []) . showHex . ord
+        pad0 :: String -> Doc
+        pad0 [] = "00"
+        pad0 [x] = "0" <> char x
+        pad0 xs = text xs
+
+ppIntAsChar :: Integral a => a -> Doc
+ppIntAsChar = escape . chr . fromIntegral
+
+
+-- print an operand and its type
+ppTyped :: (PP a, Typed a) => a -> Doc
+ppTyped a = pp (typeOf a) <+> pp a
+
 phiIncoming :: (Operand, Name) -> Doc
-phiIncoming (op, nm) = brackets (ppr 1 op <> "," <+> (local (pp nm)))
+phiIncoming (op, nm) = brackets (pp op <> "," <+> (local (pp nm)))
 
-ppAnonParam :: Parameter -> Doc
-ppAnonParam (Parameter ty _ _) = pp ty
+ppParams :: (a -> Doc) -> ([a], Bool) -> Doc
+ppParams ppParam (ps, varrg) = parens . commas $ fmap ppParam ps ++ vargs
+    where
+        vargs = if varrg then ["..."] else []
 
-ppAnonParams :: ([Parameter], Bool) -> Doc
-ppAnonParams (ps, varrg) = commas (fmap ppAnonParam ps)
+ppFunctionArgumentTypes :: Type -> Doc
+ppFunctionArgumentTypes (FunctionType {..}) = ppParams pp (argumentTypes, isVarArg)
 
--- functions rearrange the arguments in a non-consistent way
-ppFunction :: Instruction -> Doc
-ppFunction
-  (Call { function = Right (ConstantOperand (C.GlobalReference (PointerType (FunctionType retty argtys vararg) addr) nm)) ,..})
-  = pp retty <+> "@" <> pp nm <> parens (commas $ fmap pp arguments)
+ppCall :: Instruction -> Doc
+ppCall (Call { function = Right f,..})
+  = tail <+> "call" <+> pp resultType <+> ftype <+> pp f <> parens (commas $ fmap pp arguments)
+    where
+      tail = if isTailCall then "tail" else empty
+      (functionType@FunctionType {..}) = typeOf f
+      ftype = if isVarArg || isFunctionPtr resultType
+              then ppFunctionArgumentTypes functionType <> "*"
+              else empty
+ppCall x = error (show x)
 
 ppSingleBlock :: BasicBlock -> Doc
 ppSingleBlock (BasicBlock nm instrs term) = ((vcat $ (fmap pp instrs) ++ [pp term]))
 
-typePrefix :: Operand -> Doc
-typePrefix (LocalReference ty _) = pp ty
-typePrefix (ConstantOperand (C.Int width val)) = "i" <> pp width
-{-typePrefix (ConstantOperand (C.Array {..})) = memberType <+> (brackets $ commas $ fmap pp memberValues)-}
-typePrefix (ConstantOperand (C.Float (F.Single _))) = "float"
-typePrefix (ConstantOperand (C.Float (F.Double _))) = "double"
-typePrefix (ConstantOperand (C.GlobalReference ty nm)) = pp ty <+> pp nm
-typePrefix (ConstantOperand op) = pp op
-
 ppllvm :: Module -> String
-ppllvm mod  = displayS (renderPretty 0.4 100 (ppr 0 mod)) ""
+ppllvm = render . pp

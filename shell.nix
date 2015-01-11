@@ -16,6 +16,7 @@ in cabal.mkDerivation (self: {
     zlib
     ncurses
     # haskellPackages.transformers_0_3_0_0
+    haskellPackages.mtl
     haskellPackages.transformers
     haskellPackages.llvmGeneral
     haskellPackages.llvmGeneralPure
