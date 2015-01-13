@@ -10,6 +10,8 @@ module LLVM.General.Pretty (
 
 import GHC.Word
 
+import LLVM.General.Typed
+
 import LLVM.General.AST
 import LLVM.General.AST.Global
 import LLVM.General.AST.Type
@@ -64,43 +66,6 @@ label a = "label" <+> "%" <> a
 -----
 -- Reasoning about types
 -----
-
-class Typed a where
-    typeOf :: a -> Type
-
-instance Typed Operand where
-    typeOf (LocalReference t _) = t
-    typeOf (ConstantOperand c)  = typeOf c
-    typeOf _                    = MetadataType
-
-instance Typed C.Constant where
-    typeOf (C.Int bits _)  = IntegerType bits
-    typeOf (C.Float float) = typeOf float
-    typeOf (C.Null t)      = t
-    typeOf (C.Struct {..}) = StructureType isPacked (map typeOf memberValues)
-    typeOf (C.Array {..})  = ArrayType (fromIntegral $ length memberValues) memberType
-    typeOf (C.Vector {..}) = case memberValues of
-                                    [] -> error "Vectors of size zero are not allowed"
-                                    (x:_) -> ArrayType (fromIntegral $ length memberValues) (typeOf x)
-    typeOf (C.Undef t)     = t
-    typeOf (C.BlockAddress {..})   = PointerType (IntegerType 8) (AS.AddrSpace 0)
-    typeOf (C.GlobalReference t _) = t
-
-instance Typed F.SomeFloat where
-    typeOf (F.Half _)          = FloatingPointType 16  IEEE
-    typeOf (F.Single _)        = FloatingPointType 32  IEEE
-    typeOf (F.Double _)        = FloatingPointType 64  IEEE
-    typeOf (F.Quadruple _ _)   = FloatingPointType 128 IEEE
-    typeOf (F.X86_FP80 _ _)    = FloatingPointType 80  DoubleExtended
-    typeOf (F.PPC_FP128 _ _)   = FloatingPointType 80  PairOfFloats
-
-instance Typed Global where
-    typeOf (GlobalVariable {..}) = type'
-    typeOf (GlobalAlias {..})    = type'
-    typeOf (Function {..})       = let (params, isVarArg) = parameters
-                                   in FunctionType returnType (map typeOf params) isVarArg
-instance Typed Parameter where
-    typeOf (Parameter t _ _) = t
 
 isFunctionPtr (PointerType (FunctionType {..}) _) = True
 isFunctionPtr _ = False
