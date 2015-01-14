@@ -179,7 +179,8 @@ instance PP Instruction where
   pp (ICmp {..}) = "icmp" <+> pp iPredicate <+> ppTyped operand0 <> "," <+> pp operand1
 
   pp c@(Call {..}) = ppCall c
-
+  pp (Select {..}) = "select" <+> pp condition' <+> pp trueValue <+> pp falseValue
+  
   pp (GetElementPtr {..}) = "getelementptr" <+> bounds inBounds <+> commas (fmap ppTyped (address:indices))
     where
       bounds True = "inbounds"
