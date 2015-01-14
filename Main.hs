@@ -26,12 +26,12 @@ readir fname = do
   putStrLn $ replicate 80 '='
   str <- readFile fname
   withContext $ \ctx -> do
-    res <- runErrorT $ M.withModuleFromLLVMAssembly ctx str $ \mod -> do
+    res <- runExceptT $ M.withModuleFromLLVMAssembly ctx str $ \mod -> do
       ast <- M.moduleAST mod
       putStrLn $ showPretty ast
       let str = ppllvm ast
       putStrLn str
-      trip <- runErrorT $ M.withModuleFromLLVMAssembly ctx str (const $ return ())
+      trip <- runExceptT $ M.withModuleFromLLVMAssembly ctx str (const $ return ())
       case trip of
         Left err -> do
           print err
