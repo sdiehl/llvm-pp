@@ -1,17 +1,18 @@
 module Main where
 
---import Library
-
 import qualified LLVM.General.Module as M
 import LLVM.General.Context
 import LLVM.General.PrettyPrint
 import LLVM.General.Pretty (ppllvm)
 
+import Data.Functor
+import Control.Monad (filterM)
 import Control.Monad.Except
 
 import System.IO
 import System.Exit
 import System.Directory
+import System.FilePath
 import System.Environment
 
 -------------------------------------------------------------------------------
@@ -49,7 +50,8 @@ main = do
 
   case files of
     [] -> do
-      dirfiles <- getDirectoryContents "tests"
+      dircontents <- map (combine "tests") <$> getDirectoryContents "tests"
+      dirfiles <- filterM doesFileExist dircontents
       mapM readir dirfiles
     _  -> mapM readir files
 
