@@ -7,7 +7,7 @@ import LLVM.General.Context
 import LLVM.General.PrettyPrint
 import LLVM.General.Pretty (ppllvm)
 
-import Control.Monad.Error
+import Control.Monad.Except
 
 import System.IO
 import System.Exit
