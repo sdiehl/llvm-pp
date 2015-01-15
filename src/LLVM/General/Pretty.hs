@@ -294,10 +294,12 @@ ppCall (Call { function = Right f,..})
   = tail <+> "call" <+> pp resultType <+> ftype <+> pp f <> parens (commas $ fmap pp arguments)
     where
       tail = if isTailCall then "tail" else empty
-      (functionType@FunctionType {..}) = typeOf f
+      (functionType@FunctionType {..}) = referencedType (typeOf f)
       ftype = if isVarArg || isFunctionPtr resultType
               then ppFunctionArgumentTypes functionType <> "*"
               else empty
+      referencedType (PointerType t _) = referencedType t
+      referencedType t                 = t
 ppCall x = error (show x)
 
 ppSingleBlock :: BasicBlock -> Doc
