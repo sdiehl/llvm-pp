@@ -33,6 +33,13 @@ $ cabal run
 $ cabal run -- tests/simple.ll
 ```
 
+Or using stack:
+
+```bash
+$ stac build
+$ stack test
+```
+
 If you're using Nix then:
 
 ```bash
