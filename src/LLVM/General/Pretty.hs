@@ -180,7 +180,7 @@ instance PP Instruction where
 
   pp c@(Call {..}) = ppCall c
   pp (Select {..}) = "select" <+> pp condition' <+> pp trueValue <+> pp falseValue
-  
+
   pp (GetElementPtr {..}) = "getelementptr" <+> bounds inBounds <+> commas (fmap ppTyped (address:indices))
     where
       bounds True = "inbounds"
@@ -293,13 +293,18 @@ ppCall :: Instruction -> Doc
 ppCall (Call { function = Right f,..})
   = tail <+> "call" <+> pp resultType <+> ftype <+> pp f <> parens (commas $ fmap pp arguments)
     where
-      tail = if isTailCall then "tail" else empty
+      tail = if isTailCall tailCallKind then "tail" else empty
       (functionType@FunctionType {..}) = referencedType (typeOf f)
       ftype = if isVarArg || isFunctionPtr resultType
               then ppFunctionArgumentTypes functionType <> "*"
               else empty
       referencedType (PointerType t _) = referencedType t
       referencedType t                 = t
+
+      -- xxx: tail call kind hack
+      isTailCall Nothing = False
+      isTailCall (Just a) = True
+
 ppCall x = error (show x)
 
 ppSingleBlock :: BasicBlock -> Doc

@@ -24,7 +24,7 @@ library
                        LLVM.General.Typed
   default-language:    Haskell2010
   build-depends:       
-    base                 >= 4.6   && < 4.8,
+    base                 >= 4.6   && < 4.10,
     llvm-general-pure    >= 3.4.3.0,
     pretty               >= 1.1
 
@@ -33,7 +33,7 @@ Test-suite test
   main-is:             Main.hs
   default-language:    Haskell2010
   build-depends:       
-    base                 >= 4.6   && < 4.8,
+    base                 >= 4.6   && < 4.10,
     llvm-general         >= 3.4.4.1,
     llvm-general-pure    >= 3.4.4.1,
     mtl                  >= 2.1,
