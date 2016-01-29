@@ -26,19 +26,25 @@ ppllvm :: Module -> String
 Tests
 -----
 
-To run the test suite use:
+The test suite currently consists of round tripping a LLVM IR from correct IR
+outputted by the llc toolchain, parsing into llvm-general AST and then printing
+it back out and comparing it with the original textual form to see if the pretty
+printer faithfully preserves the structure. The sample modules are in
+``tests/``.
+
+Using stack:
+
+```bash
+$ stac build
+$ stack test
+```
+Using cabal:
 
 ```bash
 $ cabal run
 $ cabal run -- tests/simple.ll
 ```
 
-Or using stack:
-
-```bash
-$ stac build
-$ stack test
-```
 
 If you're using Nix then:
 
@@ -52,6 +58,6 @@ License
 
 Released under the MIT License.
 
-Copyright (c) 2014-2015, Stephen Diehl
+Copyright (c) 2014-2016, Stephen Diehl
 Copyright (c) 2015 Cedric Shock
 
