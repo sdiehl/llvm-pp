@@ -27,8 +27,10 @@ import qualified LLVM.General.AST.AddrSpace as AS
 import qualified LLVM.General.AST.Float as F
 
 import Data.String
+
 import Text.Printf
-import Text.PrettyPrint
+import Data.Text.Lazy (Text, pack, unpack)
+import Text.PrettyPrint.Leijen.Text
 
 import Data.Char (chr, ord, isControl, isLetter, isDigit)
 import Data.List (intersperse)
@@ -52,7 +54,7 @@ hlinecat :: [Doc] -> Doc
 hlinecat = vcat . intersperse (text "")
 
 wrapbraces :: Doc -> Doc -> Doc
-wrapbraces leadIn x = (leadIn <> char '{') $+$ ( x ) $+$ char '}'
+wrapbraces leadIn x = (leadIn <> char '{') <+> x <+> char '}'
 
 local :: Doc -> Doc
 local a = "%" <> a
@@ -90,10 +92,10 @@ instance PP Integer where
   pp = integer
 
 instance PP Name where
-  pp (Name []) = doubleQuotes empty
+  pp (Name []) = dquotes empty
   pp (Name name@(first:_))
-    | isFirst first && all isRest name = text name
-    | otherwise = doubleQuotes . hcat . map escape $ name
+    | isFirst first && all isRest name = text (pack name)
+    | otherwise = dquotes . hcat . map escape $ name
     where
         isFirst c = isLetter c || c == '-' || c == '_'
         isRest c = isDigit c || isFirst c
@@ -151,7 +153,7 @@ instance PP Definition where
 
 instance PP BasicBlock where
   pp (BasicBlock nm instrs term) =
-    pp nm <> ":" $+$ nest 2 (vcat $ (fmap pp instrs) ++ [pp term])
+    pp nm <> ":" <+> nest 2 (vcat $ (fmap pp instrs) ++ [pp term])
 
 instance PP Terminator where
   pp (Br dest meta) = "br" <+> label (pp dest)
@@ -197,12 +199,12 @@ instance PP Operand where
 
 instance PP C.Constant where
   pp (C.Int width val) = pp val
-  pp (C.Float (F.Double val)) = text $ printf "%6.6e" val
-  pp (C.Float (F.Single val)) = text $ printf "%6.6e" val
+  pp (C.Float (F.Double val)) = text $ pack $ printf "%6.6e" val
+  pp (C.Float (F.Single val)) = text $ pack $ printf "%6.6e" val
   pp (C.GlobalReference ty nm) = "@" <> pp nm
 
   pp (C.Array {..})
-    | memberType == (IntegerType 8) = "c" <> (doubleQuotes $ hcat [ppIntAsChar val | C.Int _ val <- memberValues])
+    | memberType == (IntegerType 8) = "c" <> (dquotes $ hcat [ppIntAsChar val | C.Int _ val <- memberValues])
     | otherwise = brackets $ commas $ fmap ppTyped memberValues
 
 
@@ -268,7 +270,7 @@ escape c    = if isControl c
         pad0 :: String -> Doc
         pad0 [] = "00"
         pad0 [x] = "0" <> char x
-        pad0 xs = text xs
+        pad0 xs = text (pack xs)
 
 ppIntAsChar :: Integral a => a -> Doc
 ppIntAsChar = escape . chr . fromIntegral
@@ -310,5 +312,5 @@ ppCall x = error (show x)
 ppSingleBlock :: BasicBlock -> Doc
 ppSingleBlock (BasicBlock nm instrs term) = ((vcat $ (fmap pp instrs) ++ [pp term]))
 
-ppllvm :: Module -> String
-ppllvm = render . pp
+ppllvm :: Module -> Text
+ppllvm = displayT . renderCompact . pp

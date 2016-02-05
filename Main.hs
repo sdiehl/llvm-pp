@@ -5,9 +5,12 @@ import LLVM.General.Context
 import LLVM.General.PrettyPrint
 import LLVM.General.Pretty (ppllvm)
 
-import Data.Functor
 import Control.Monad (filterM)
 import Control.Monad.Except
+
+import Data.Functor
+import qualified Data.Text.Lazy as T
+import qualified Data.Text.Lazy.IO as T
 
 import System.IO
 import System.Exit
@@ -31,8 +34,8 @@ readir fname = do
       ast <- M.moduleAST mod
       putStrLn $ showPretty ast
       let str = ppllvm ast
-      putStrLn str
-      trip <- runExceptT $ M.withModuleFromLLVMAssembly ctx str (const $ return ())
+      T.putStrLn str
+      trip <- runExceptT $ M.withModuleFromLLVMAssembly ctx (T.unpack str) (const $ return ())
       case trip of
         Left err -> do
           print err
