@@ -3,6 +3,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module LLVM.General.Pretty (
   ppllvm,
@@ -164,32 +165,34 @@ instance PP Terminator where
     <> "," <+> label (pp fdest)
 
 instance PP Instruction where
-  pp (Mul {..}) = "mul" <+> ppTyped operand0 <> "," <+> pp operand1
-  pp (Add {..}) = "add" <+> ppTyped operand0 <> "," <+> pp operand1
-  pp (Sub {..}) = "sub" <+> ppTyped operand0 <> "," <+> pp operand1
-  pp (FSub {..}) = "fsub" <+> ppTyped operand0 <> "," <+> pp operand1
-  pp (FMul {..}) = "fmul" <+> ppTyped operand0 <> "," <+> pp operand1
+  pp x = case x of
+    Mul {..}    -> "mul" <+> ppTyped operand0 <> "," <+> pp operand1
+    Add {..}    -> "add" <+> ppTyped operand0 <> "," <+> pp operand1
+    Sub {..}    -> "sub" <+> ppTyped operand0 <> "," <+> pp operand1
+    FSub {..}   -> "fsub" <+> ppTyped operand0 <> "," <+> pp operand1
+    FMul {..}   -> "fmul" <+> ppTyped operand0 <> "," <+> pp operand1
 
-  pp (FAdd {..}) = "fadd" <+> ppTyped operand0 <> "," <+> pp operand1
-  pp (FCmp {..}) = "fcmp" <+> pp fpPredicate <+> ppTyped operand0 <> "," <+> pp operand1
+    FAdd {..}   -> "fadd" <+> ppTyped operand0 <> "," <+> pp operand1
+    FCmp {..}   -> "fcmp" <+> pp fpPredicate <+> ppTyped operand0 <> "," <+> pp operand1
 
-  pp (Alloca {..}) = "alloca" <+> pp allocatedType
-  pp (Store {..}) = "store" <+> ppTyped value <> "," <+> ppTyped address
-  pp (Load {..}) = "load" <+> ppTyped address
-  pp (Phi {..}) = "phi" <+> pp type' <+> commas (fmap phiIncoming incomingValues)
+    Alloca {..} -> "alloca" <+> pp allocatedType
+    Store {..}  -> "store" <+> ppTyped value <> "," <+> ppTyped address
+    Load {..}   -> "load" <+> ppTyped address
+    Phi {..}    -> "phi" <+> pp type' <+> commas (fmap phiIncoming incomingValues)
 
-  pp (ICmp {..}) = "icmp" <+> pp iPredicate <+> ppTyped operand0 <> "," <+> pp operand1
+    ICmp {..}   -> "icmp" <+> pp iPredicate <+> ppTyped operand0 <> "," <+> pp operand1
 
-  pp c@(Call {..}) = ppCall c
-  pp (Select {..}) = "select" <+> pp condition' <+> pp trueValue <+> pp falseValue
+    Call {..}   -> ppCall x
+    Select {..} -> "select" <+> pp condition' <+> pp trueValue <+> pp falseValue
 
-  pp (GetElementPtr {..}) = "getelementptr" <+> bounds inBounds <+> commas (fmap ppTyped (address:indices))
+    GetElementPtr {..} -> "getelementptr" <+> bounds inBounds <+> commas (fmap ppTyped (address:indices))
+
     where
       bounds True = "inbounds"
       bounds False = empty
 
 instance PP CallableOperand where
-  pp (Left asm) = undefined
+  pp (Left asm) = error "CallableOperand"
   pp (Right op) = pp op
 
 instance PP Operand where
@@ -203,12 +206,12 @@ instance PP C.Constant where
   pp (C.Float (F.Single val)) = text $ pack $ printf "%6.6e" val
   pp (C.GlobalReference ty nm) = "@" <> pp nm
 
-  pp (C.Array {..})
+  pp C.Array {..}
     | memberType == (IntegerType 8) = "c" <> (dquotes $ hcat [ppIntAsChar val | C.Int _ val <- memberValues])
     | otherwise = brackets $ commas $ fmap ppTyped memberValues
 
 
-  pp (C.GetElementPtr {..}) = "getelementptr" <+> bounds inBounds <+> commas (fmap ppTyped (address:indices))
+  pp C.GetElementPtr {..} = "getelementptr" <+> bounds inBounds <+> commas (fmap ppTyped (address:indices))
     where
       bounds True = "inbounds"
       bounds False = empty
@@ -218,11 +221,11 @@ instance PP a => PP (Named a) where
   pp (Do a) = pp a
 
 instance PP Module where
-  pp (Module {..}) =
+  pp Module {..} =
     let header = printf "; ModuleID = '%s'" moduleName in
     hlinecat (fromString header : (fmap pp moduleDefinitions))
 
-instance PP (FP.FloatingPointPredicate) where
+instance PP FP.FloatingPointPredicate where
   pp op = case op of
    FP.False -> "false"
    FP.OEQ   -> "oeq"
@@ -241,7 +244,7 @@ instance PP (FP.FloatingPointPredicate) where
    FP.UNO   -> "uno"
    FP.True  -> "true"
 
-instance PP (IP.IntegerPredicate) where
+instance PP IP.IntegerPredicate where
   pp op = case op of
    IP.EQ  -> "eq"
    IP.NE  -> "ne"
@@ -289,10 +292,10 @@ ppParams ppParam (ps, varrg) = parens . commas $ fmap ppParam ps ++ vargs
         vargs = if varrg then ["..."] else []
 
 ppFunctionArgumentTypes :: Type -> Doc
-ppFunctionArgumentTypes (FunctionType {..}) = ppParams pp (argumentTypes, isVarArg)
+ppFunctionArgumentTypes FunctionType {..} = ppParams pp (argumentTypes, isVarArg)
 
 ppCall :: Instruction -> Doc
-ppCall (Call { function = Right f,..})
+ppCall Call { function = Right f,..}
   = tail <+> "call" <+> pp resultType <+> ftype <+> pp f <> parens (commas $ fmap pp arguments)
     where
       tail = if isTailCall tailCallKind then "tail" else empty
@@ -310,7 +313,7 @@ ppCall (Call { function = Right f,..})
 ppCall x = error (show x)
 
 ppSingleBlock :: BasicBlock -> Doc
-ppSingleBlock (BasicBlock nm instrs term) = ((vcat $ (fmap pp instrs) ++ [pp term]))
+ppSingleBlock (BasicBlock nm instrs term) = (vcat $ (fmap pp instrs) ++ [pp term])
 
 ppllvm :: Module -> Text
-ppllvm = displayT . renderCompact . pp
+ppllvm = displayT . renderPretty 0.4 100 . pp
