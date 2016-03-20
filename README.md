@@ -56,7 +56,15 @@ $ cabal run
 Standalone Example
 ------------------
 
-Consider the example LLVM module.
+To try out the standalone example run:
+
+```bash
+$ stack repl
+$ :load Standalone.hs
+main
+```
+
+Consider the basic example LLVM module.
 
 ```llvm
 ; ModuleID = 'example-llvm-module'
