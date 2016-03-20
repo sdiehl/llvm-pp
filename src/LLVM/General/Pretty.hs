@@ -9,6 +9,7 @@ module LLVM.General.Pretty (
   ppllvm,
 ) where
 
+import Prelude hiding ((<$>))
 import GHC.Word
 
 import LLVM.General.Typed
@@ -26,6 +27,7 @@ import qualified LLVM.General.AST.FloatingPointPredicate as FP
 import qualified LLVM.General.AST.IntegerPredicate as IP
 import qualified LLVM.General.AST.AddrSpace as AS
 import qualified LLVM.General.AST.Float as F
+import LLVM.General.AST.FunctionAttribute
 
 import Data.String
 
@@ -52,10 +54,10 @@ colons :: [Doc] -> Doc
 colons  = hcat . intersperse (char ':')
 
 hlinecat :: [Doc] -> Doc
-hlinecat = vcat . intersperse (text "")
+hlinecat = vcat . intersperse softbreak
 
 wrapbraces :: Doc -> Doc -> Doc
-wrapbraces leadIn x = (leadIn <> char '{') <+> x <+> char '}'
+wrapbraces leadIn x = (leadIn <> char '{') <$> x <$> char '}'
 
 local :: Doc -> Doc
 local a = "%" <> a
@@ -66,11 +68,7 @@ global a = "@" <> a
 label :: Doc -> Doc
 label a = "label" <+> "%" <> a
 
------
--- Reasoning about types
------
-
-isFunctionPtr (PointerType (FunctionType {..}) _) = True
+isFunctionPtr (PointerType FunctionType {..} _) = True
 isFunctionPtr _ = False
 
 -------------------------------------------------------------------------------
@@ -140,7 +138,7 @@ instance PP Global where
         -- single unnamed block is special cased, and won't parse otherwise... yeah good times
         [b@(BasicBlock (UnName _) _ _)] ->
             ("define" <+> pp returnType <+> global (pp name) <> ppParams pp parameters)
-            `wrapbraces` (nest 2 $ ppSingleBlock b)
+            `wrapbraces` (indent 2 $ ppSingleBlock b)
 
         bs ->
           ("define" <+> pp returnType <+> global (pp name) <> ppParams pp parameters)
@@ -151,10 +149,46 @@ instance PP Global where
 
 instance PP Definition where
   pp (GlobalDefinition x) = pp x
+  pp (TypeDefinition nm ty) = pp nm
+  pp (FunctionAttributes gid attrs) = "attributes" <> pp gid <+> "=" <+> braces (hsep (fmap pp attrs))
+
+instance PP FunctionAttribute where
+  pp x = case x of
+   NoReturn -> "noreturn"
+   NoUnwind -> "nounwind"
+   ReadNone -> "readnone"
+   ReadOnly -> "readonly"
+   --NoInline
+   --AlwaysInline
+   --MinimizeSize
+   --OptimizeForSize
+   --OptimizeNone
+   --StackProtect
+   --StackProtectReq
+   --StackProtectStrong
+   --NoRedZone
+   --NoImplicitFloat
+   --Naked
+   --InlineHint
+   --StackAlignment Word64
+   --ReturnsTwice
+   --UWTable
+   --NonLazyBind
+   --Builtin
+   --NoBuiltin
+   --Cold
+   --JumpTable
+   --NoDuplicate
+   --SanitizeAddress
+   --SanitizeThread
+   --SanitizeMemory
+
+instance PP GroupID where
+  pp (GroupID x) = "#" <> int (fromIntegral x)
 
 instance PP BasicBlock where
   pp (BasicBlock nm instrs term) =
-    pp nm <> ":" <+> nest 2 (vcat $ (fmap pp instrs) ++ [pp term])
+    pp nm <> ":" <$> indent 2 (vcat $ (fmap pp instrs) ++ [pp term])
 
 instance PP Terminator where
   pp (Br dest meta) = "br" <+> label (pp dest)
@@ -211,7 +245,7 @@ instance PP C.Constant where
     | otherwise = brackets $ commas $ fmap ppTyped memberValues
 
 
-  pp C.GetElementPtr {..} = "getelementptr" <+> bounds inBounds <+> commas (fmap ppTyped (address:indices))
+  pp C.GetElementPtr {..} = "getelementptr" <+> bounds inBounds <+> parens (commas (fmap ppTyped (address:indices)))
     where
       bounds True = "inbounds"
       bounds False = empty

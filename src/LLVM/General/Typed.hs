@@ -80,10 +80,12 @@ instance Typed C.Constant where
                                         _ -> VoidType {- error -}
     typeOf (C.ExtractValue {..})    = extractValueType (typeOf aggregate) indices
     typeOf (C.InsertValue {..})     = typeOf aggregate
-    
-getElementPtrType = undefined
-extractValueType = undefined
-    
+
+getElementPtrType :: Type -> [C.Constant] -> Type
+getElementPtrType ty cons = ptr i8 -- XXX
+
+extractValueType = error "extract"
+
 instance Typed F.SomeFloat where
     typeOf (F.Half _)          = FloatingPointType 16  IEEE
     typeOf (F.Single _)        = FloatingPointType 32  IEEE
