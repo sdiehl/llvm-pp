@@ -150,38 +150,44 @@ instance PP Global where
 instance PP Definition where
   pp (GlobalDefinition x) = pp x
   pp (TypeDefinition nm ty) = pp nm
-  pp (FunctionAttributes gid attrs) = "attributes" <> pp gid <+> "=" <+> braces (hsep (fmap pp attrs))
+  pp (FunctionAttributes gid attrs) = "attributes" <+> pp gid <+> "=" <+> braces (hsep (fmap pp attrs))
+  pp (NamedMetadataDefinition nm meta) = text (pack nm)
+  pp (MetadataNodeDefinition node meta) = pp node
 
 instance PP FunctionAttribute where
   pp x = case x of
-   NoReturn -> "noreturn"
-   NoUnwind -> "nounwind"
-   ReadNone -> "readnone"
-   ReadOnly -> "readonly"
-   --NoInline
-   --AlwaysInline
-   --MinimizeSize
-   --OptimizeForSize
-   --OptimizeNone
-   --StackProtect
-   --StackProtectReq
-   --StackProtectStrong
-   --NoRedZone
-   --NoImplicitFloat
-   --Naked
-   --InlineHint
-   --StackAlignment Word64
-   --ReturnsTwice
-   --UWTable
-   --NonLazyBind
-   --Builtin
-   --NoBuiltin
-   --Cold
-   --JumpTable
-   --NoDuplicate
-   --SanitizeAddress
-   --SanitizeThread
-   --SanitizeMemory
+   NoReturn            -> "noreturn"
+   NoUnwind            -> "nounwind"
+   ReadNone            -> "readnone"
+   ReadOnly            -> "readonly"
+   NoInline            -> "noinline"
+   AlwaysInline        -> "alwaysinline"
+   MinimizeSize        -> "minimizesize"
+   OptimizeForSize     -> "optimizeforsize"
+   OptimizeNone        -> "optimizenone"
+   StackProtect        -> "stackprotect"
+   StackProtectReq     -> "stackprotectreq"
+   StackProtectStrong  -> "stackprotectstrong"
+   NoRedZone           -> "noredzone"
+   NoImplicitFloat     -> "noimplicitfloat"
+   Naked               -> "naked"
+   InlineHint          -> "inlinehint"
+   StackAlignment n    -> "stackalign"
+   ReturnsTwice        -> "TODO"
+   UWTable             -> "uwtable"
+   NonLazyBind         -> "TODO"
+   Builtin             -> "TODO"
+   NoBuiltin           -> "TODO"
+   Cold                -> "TODO"
+   JumpTable           -> "TODO"
+   NoDuplicate         -> "TODO"
+   SanitizeAddress     -> "TODO"
+   SanitizeThread      -> "TODO"
+   SanitizeMemory      -> "TODO"
+   StringAttribute k v -> dquotes (text (pack k)) <> "=" <> dquotes (text (pack v))
+
+instance PP MetadataNodeID where
+  pp (MetadataNodeID x) = "#" <> int (fromIntegral x)
 
 instance PP GroupID where
   pp (GroupID x) = "#" <> int (fromIntegral x)
@@ -218,8 +224,11 @@ instance PP Instruction where
 
     Call {..}   -> ppCall x
     Select {..} -> "select" <+> pp condition' <+> pp trueValue <+> pp falseValue
+    SExt {..}    -> "sext" <+> ppTyped operand0 <+> "to" <+> pp type'
 
     GetElementPtr {..} -> "getelementptr" <+> bounds inBounds <+> commas (fmap ppTyped (address:indices))
+
+    x -> error (show x)
 
     where
       bounds True = "inbounds"
