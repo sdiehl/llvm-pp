@@ -224,7 +224,8 @@ instance PP Instruction where
 
     Call {..}   -> ppCall x
     Select {..} -> "select" <+> pp condition' <+> pp trueValue <+> pp falseValue
-    SExt {..}    -> "sext" <+> ppTyped operand0 <+> "to" <+> pp type'
+    SExt {..}   -> "sext" <+> ppTyped operand0 <+> "to" <+> pp type'
+    Trunc {..}  -> "sext" <+> ppTyped operand0 <+> "to" <+> pp type'
 
     GetElementPtr {..} -> "getelementptr" <+> bounds inBounds <+> commas (fmap ppTyped (address:indices))
 
