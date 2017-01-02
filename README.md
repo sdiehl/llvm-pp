@@ -13,6 +13,10 @@ program. Be warned.
 Usage
 -----
 
+```bash
+sudo apt-get install llvm-dev-3.8
+```
+
 There is a single function ``ppllvm`` that maps a LLVM.General.AST.Module to a
 String.
 
@@ -44,7 +48,6 @@ Using cabal:
 $ cabal run
 $ cabal run -- tests/simple.ll
 ```
-
 
 If you're using Nix then:
 
@@ -142,6 +145,5 @@ License
 
 Released under the MIT License.
 
-Copyright (c) 2014-2016, Stephen Diehl
+Copyright (c) 2014-2017, Stephen Diehl
 Copyright (c) 2015 Cedric Shock
-

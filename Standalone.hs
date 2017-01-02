@@ -4,53 +4,41 @@ module Standalone where
 import LLVM.General.Pretty (ppllvm)
 
 -- AST
+import LLVM.General.AST
 import qualified LLVM.General.AST as AST
-import qualified LLVM.General.AST.Linkage as Linkage
-import qualified LLVM.General.AST.Visibility as Visibility
-import qualified LLVM.General.AST.CallingConvention as Convention
+import LLVM.General.AST.Global
 
 import Data.Text.Lazy.IO as TIO
 
+int :: Type
+int = IntegerType 32
+
+defAdd :: Definition
+defAdd = GlobalDefinition functionDefaults
+  { name = Name "add"
+  , parameters =
+      ( [ Parameter int (Name "a") []
+        , Parameter int (Name "b") [] ]
+      , False )
+  , returnType = int
+  , basicBlocks = [body]
+  }
+  where
+    body = BasicBlock
+        (Name "entry")
+        [ Name "result" :=
+            Add False
+                False
+                (LocalReference int (Name "a"))
+                (LocalReference int (Name "b"))
+                []]
+        (Do $ Ret (Just (LocalReference int (Name "result"))) [])
+
 astModule :: AST.Module
-astModule = AST.Module
-    { AST.moduleName         = "example-llvm-module"
-    , AST.moduleDataLayout   = Nothing
-    , AST.moduleTargetTriple = Nothing
-    , AST.moduleDefinitions  =
-        [ AST.GlobalDefinition
-            (AST.Function
-                Linkage.External
-                Visibility.Default
-                Nothing
-                Convention.C
-                []
-                (AST.IntegerType 8)
-                (AST.Name "f")
-                ([AST.Parameter (AST.IntegerType 8) (AST.Name "x") []], False)
-                []
-                Nothing
-                Nothing
-                0
-                Nothing
-                Nothing
-                [ AST.BasicBlock
-                    (AST.Name "entry")
-                    []
-                    (AST.Do
-                        (AST.Ret
-                            (Just
-                                (AST.LocalReference
-                                    (AST.IntegerType 8)
-                                    (AST.Name "x")
-                                )
-                            )
-                            []
-                        )
-                    )
-                ]
-            )
-        ]
-    }
+astModule = defaultModule
+  { moduleName = "llvm-pp"
+  , moduleDefinitions = [defAdd]
+  }
 
 main :: IO ()
 main = TIO.putStrLn (ppllvm astModule)
